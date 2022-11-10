@@ -8,6 +8,21 @@
  */
 #include <TFT_eSPI.h> // Hardware-specific library
 #include <SPI.h>
+#include "Button2.h"
+#include "WiFi.h"
+#include <Wire.h>
+
+/////////////////////////////
+#define BUTTON_1            35 //pin of left button
+#define BUTTON_2            0  //pin of right button
+Button2 btn1(BUTTON_1);        //define function of Btn1
+Button2 btn2(BUTTON_2);        //define function of Btn2
+int page = 0;                  //Home page
+/*
+ * the button function should be able to detect rebounce and pressing of the btn
+ */
+/////////////////////////////
+/////////////////////////////
 #define M_SIZE 1
 #define MIN_T 23
 #define MAX_T 23.01       //24hours
@@ -19,10 +34,47 @@ TFT_eSPI tft = TFT_eSPI();       // Invoke custom library
 
 uint32_t updateTime = 0;       // time for next update
 double sampling_rate = 0;
+//////////////////////////////
+void changePage(int8_t increment){
+  if (page > MIN_PAGE || page < MAX_PAGE){
+    page = page + increment;
+  }
+}
+void button_init()
+{
+    btn1.setLongClickHandler([](Button2 & b) {
+        btnCick = false;
+        int r = digitalRead(TFT_BL);
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        tft.setTextDatum(MC_DATUM);
+        tft.drawString("Press again to wake up",  tft.width() / 2, tft.height() / 2 );
+        espDelay(6000);
+        digitalWrite(TFT_BL, !r);
 
-uint16_t pix_gapV = 0;
-uint16_t pix_gapH = 0;
+        tft.writecommand(TFT_DISPOFF);
+        tft.writecommand(TFT_SLPIN);
+        //After using light sleep, you need to disable timer wake, because here use external IO port to wake up
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+        // esp_sleep_enable_ext1_wakeup(GPIO_SEL_35, ESP_EXT1_WAKEUP_ALL_LOW);
+        esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0);
+        delay(200);
+        esp_deep_sleep_start();
+    });
+    btn1.setPressedHandler([](Button2 & b) {
+        Serial.println("Detect Voltage..");
+        changePage(-1);
+    });
 
+    btn2.setPressedHandler([](Button2 & b) {
+        changePage(1);
+        Serial.println("btn press wifi scan");
+        screen(page);
+    });
+}
+
+
+//////////////////////////////
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200); // For debug
@@ -55,8 +107,9 @@ void Draw_graph(float v_min, float v_max,uint8_t Vgaps,float h_min, float h_max,
   uint16_t y0 = 10;     //position y-max
   uint16_t x1 = 234-10; //position x-max
   uint16_t y1 = 125-20; //position y-min
-  uint16_t x2 = 10;
-  uint16_t y2 = 10;
+
+  uint16_t pix_gapV = 0;
+  uint16_t pix_gapH = 0;
   //draw the horizontal line first
   tft.drawLine(x0-10,y1,x1+5,y1,TFT_BLACK);
   //draw the vertical line second
